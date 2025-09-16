@@ -6,30 +6,13 @@ from tkinter import ttk
 # -----------------------------
 # Color and Style Configuration
 # -----------------------------
-GRADIENT_TOP = "#8EC5FC"  # gradient top
-GRADIENT_BOTTOM = "#E0C3FC"  # gradient bottom
-
-# Glass + Neon theme
-MAIN_BG = "#000000"  # not visible; gradient canvas used
-GLASS_BG = "#EDEFF8"  # simulated frosted white (#FFFFFF20 approx)
-GLASS_BORDER = "#D9DAEE"  # simulated #FFFFFF40
-GLASS_RADIUS = 20
-GLASS_SHADOW = "#333333"  # simulated #00000040
-
-BTN_BG = "#EEF1FA"        # simulated semi-transparent white (#FFFFFF25)
-BTN_BORDER = "#D0D5E6"    # simulated #FFFFFF50
-BTN_FG = "#FFFFFF"
-BTN_TEXT_NORMAL = "#FFFFFF"
-BTN_TEXT_FUNC = "#00FFD1"  # neon cyan for functions
-BTN_HOVER_BG = "#FFFFFF"   # simulated lighten to #FFFFFF40
-BTN_NEON_GLOW = "#00FFD1"
-
-FUNC_BG = BTN_BG  # keep frosted look; use text color to distinguish
+MAIN_BG = "#1E1E2E"       # deep dark gray
+BTN_BG = "#2D2D3A"        # dark slate
+FUNC_BG = "#4C4C6D"       # muted blue-gray
 EQUALS_BG = "#FF6B6B"     # modern coral red
 ACCENT_BG = "#FFB347"     # amber/orange accent (clear/backspace)
-
-DISPLAY_BG = "#222222"    # simulated semi-transparent black (#00000050)
-DISPLAY_BORDER = "#AEB2C8"  # subtle border (#FFFFFF20 approx)
+BTN_FG = "#FFFFFF"         # white
+DISPLAY_BG = "#121212"    # near black
 DISPLAY_FG = "#00FFAB"    # neon teal/green
 
 # Minimum sizes for each mode
@@ -59,12 +42,9 @@ class RoundedButton(tk.Canvas):
         height: int = 56,
         radius: int = 12,
         bg_color: str = BTN_BG,
-        fg_color: str = BTN_TEXT_NORMAL,
+        fg_color: str = BTN_FG,
         hover_lighten: float = 0.12,
         font=("SFMono", 14, "bold"),
-        border_color: str = BTN_BORDER,
-        show_neon_glow: bool = True,
-        glow_color: str = BTN_NEON_GLOW,
         **kwargs,
     ):
         super().__init__(
@@ -83,16 +63,10 @@ class RoundedButton(tk.Canvas):
         self.hover_bg = lighten_color(bg_color, hover_lighten)
         self.fg = fg_color
         self.font = font
-        self.border_color = border_color
-        self.show_neon_glow = show_neon_glow
-        self.glow_color = glow_color
-        self.is_pressed = False
         self._draw()
         self.bind("<Enter>", self._on_enter)
         self.bind("<Leave>", self._on_leave)
         self.bind("<Button-1>", self._on_click)
-        self.bind("<ButtonPress-1>", self._on_press)
-        self.bind("<ButtonRelease-1>", self._on_release)
         self.bind("<Key-Return>", self._on_click)
         self.bind("<Key-space>", self._on_click)
         self.focusable = True
@@ -103,15 +77,6 @@ class RoundedButton(tk.Canvas):
         h = int(self["height"]) if isinstance(self["height"], str) else self["height"]
         r = min(self.radius, w // 2, h // 2)
         x1, y1, x2, y2 = 2, 2, w - 2, h - 2
-        # Shadow/glow layer
-        if self.show_neon_glow and self.is_pressed:
-            shadow_parts = [
-                self.create_rectangle(x1 + r - 1, y1 - 1, x2 - r + 1, y2 + 1, outline=self.glow_color, fill=""),
-                self.create_rectangle(x1 - 1, y1 + r - 1, x2 + 1, y2 - r + 1, outline=self.glow_color, fill=""),
-            ]
-            for sp in shadow_parts:
-                self.itemconfig(sp, width=2)
-
         # Rounded rectangle using rectangles and arcs
         self.shape_parts = [
             self.create_rectangle(x1 + r, y1, x2 - r, y2, outline=self.base_bg, fill=self.base_bg),
@@ -121,18 +86,6 @@ class RoundedButton(tk.Canvas):
             self.create_arc(x1, y2 - 2 * r, x1 + 2 * r, y2, start=180, extent=90, outline=self.base_bg, fill=self.base_bg),
             self.create_arc(x2 - 2 * r, y2 - 2 * r, x2, y2, start=270, extent=90, outline=self.base_bg, fill=self.base_bg),
         ]
-        # Border
-        self.border_parts = [
-            self.create_rectangle(x1 + r, y1, x2 - r, y2, outline=self.border_color, fill=""),
-            self.create_rectangle(x1, y1 + r, x2, y2 - r, outline=self.border_color, fill=""),
-            self.create_arc(x1, y1, x1 + 2 * r, y1 + 2 * r, start=90, extent=90, outline=self.border_color, fill=""),
-            self.create_arc(x2 - 2 * r, y1, x2, y1 + 2 * r, start=0, extent=90, outline=self.border_color, fill=""),
-            self.create_arc(x1, y2 - 2 * r, x1 + 2 * r, y2, start=180, extent=90, outline=self.border_color, fill=""),
-            self.create_arc(x2 - 2 * r, y2 - 2 * r, x2, y2, start=270, extent=90, outline=self.border_color, fill=""),
-        ]
-        for item in self.border_parts:
-            self.itemconfig(item, width=1)
-
         self.text_item = self.create_text((w // 2, h // 2), text=self.text, fill=self.fg, font=self.font)
 
     def _paint(self, color: str):
@@ -150,75 +103,10 @@ class RoundedButton(tk.Canvas):
             self.command()
 
     def _on_press(self, _):
-        self.is_pressed = True
-        self._draw()
+        pass
 
     def _on_release(self, _):
-        self.is_pressed = False
-        self._draw()
-
-
-class GlassPanel(tk.Canvas):
-    def __init__(self, master, radius: int = GLASS_RADIUS, pad: int = 14, **kwargs):
-        super().__init__(master, highlightthickness=0, bd=0, bg=MAIN_BG, **kwargs)
-        self.radius = radius
-        self.pad = pad
-        self.bind("<Configure>", self._redraw)
-        # inner content frame
-        self.content = tk.Frame(self, bg=MAIN_BG)
-        self.content_window = self.create_window(self.pad, self.pad, anchor="nw", window=self.content)
-
-    def _redraw(self, _):
-        self.delete("panel")
-        w = self.winfo_width()
-        h = self.winfo_height()
-        r = min(self.radius, w // 12, h // 12)
-
-        x1, y1, x2, y2 = 8, 8, w - 8, h - 8
-
-        # Shadow (offset)
-        self._rounded_rect(x1 + 4, y1 + 6, x2 + 4, y2 + 6, r, fill=GLASS_SHADOW, outline="", tags="panel")
-        # Panel fill
-        self._rounded_rect(x1, y1, x2, y2, r, fill=GLASS_BG, outline=GLASS_BORDER, width=2, tags="panel")
-
-        # Reposition content window inside with padding
-        self.coords(self.content_window, x1 + self.pad, y1 + self.pad)
-        self.itemconfig(self.content_window, width=max(0, x2 - x1 - 2 * self.pad), height=max(0, y2 - y1 - 2 * self.pad))
-
-    def _rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
-        parts = []
-        parts.append(self.create_rectangle(x1 + r, y1, x2 - r, y2, **kwargs))
-        parts.append(self.create_rectangle(x1, y1 + r, x2, y2 - r, **kwargs))
-        parts.append(self.create_arc(x1, y1, x1 + 2 * r, y1 + 2 * r, start=90, extent=90, **kwargs))
-        parts.append(self.create_arc(x2 - 2 * r, y1, x2, y1 + 2 * r, start=0, extent=90, **kwargs))
-        parts.append(self.create_arc(x1, y2 - 2 * r, x1 + 2 * r, y2, start=180, extent=90, **kwargs))
-        parts.append(self.create_arc(x2 - 2 * r, y2 - 2 * r, x2, y2, start=270, extent=90, **kwargs))
-        return parts
-
-
-def _hex_to_rgb(hex_color: str):
-    hex_color = hex_color.lstrip('#')
-    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-
-def _rgb_to_hex(rgb):
-    return f"#{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}"
-
-def draw_vertical_gradient(canvas: tk.Canvas, top_color: str, bottom_color: str):
-    canvas.delete("gradient")
-    width = canvas.winfo_width()
-    height = canvas.winfo_height()
-    if width <= 0 or height <= 0:
-        return
-    r1, g1, b1 = _hex_to_rgb(top_color)
-    r2, g2, b2 = _hex_to_rgb(bottom_color)
-    steps = max(2, height)
-    for i in range(steps):
-        t = i / (steps - 1)
-        r = int(r1 + (r2 - r1) * t)
-        g = int(g1 + (g2 - g1) * t)
-        b = int(b1 + (b2 - b1) * t)
-        color = _rgb_to_hex((r, g, b))
-        canvas.create_line(0, i, width, i, fill=color, tags="gradient")
+        pass
 
 
 class CalculatorApp(tk.Tk):
@@ -226,7 +114,7 @@ class CalculatorApp(tk.Tk):
         super().__init__()
         self.title("Scientific Calculator")
         self.configure(bg=MAIN_BG)
-        self.geometry("640x760")
+        self.geometry("560x640")
 
         # Modes
         self.is_scientific = True
@@ -238,21 +126,11 @@ class CalculatorApp(tk.Tk):
         # Expression state
         self.expression = tk.StringVar(value="")
 
-        # Background gradient
-        self.background_canvas = tk.Canvas(self, highlightthickness=0, bd=0)
-        self.background_canvas.place(x=0, y=0, relwidth=1, relheight=1)
-        self.bind("<Configure>", lambda e: draw_vertical_gradient(self.background_canvas, GRADIENT_TOP, GRADIENT_BOTTOM))
-
-        # Glass panel container
-        self.panel = GlassPanel(self)
-        self.panel.grid(row=0, column=0, sticky="nsew", padx=18, pady=18)
-
-        # Build UI into glass panel content
         self._build_menu()
-        self._build_display(parent=self.panel.content)
-        self._build_toggles(parent=self.panel.content)
-        self._build_keypads(parent=self.panel.content)
-        self._configure_grid(container=self.panel.content)
+        self._build_display()
+        self._build_toggles()
+        self._build_keypads()
+        self._configure_grid()
         self._apply_min_size()
 
         self.bind("<Key>", self._handle_keypress)
@@ -266,12 +144,10 @@ class CalculatorApp(tk.Tk):
         menubar.add_cascade(label="View", menu=view_menu)
         self.config(menu=menubar)
 
-    def _build_display(self, parent=None):
-        parent = parent or self
-        display_frame = tk.Frame(parent, bg=MAIN_BG)
-        display_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8, 6))
+    def _build_display(self):
+        display_frame = tk.Frame(self, bg=MAIN_BG)
+        display_frame.grid(row=0, column=0, sticky="nsew", padx=16, pady=(16, 8))
 
-        # Display styled to look like rounded frosted panel
         self.display = tk.Entry(
             display_frame,
             textvariable=self.expression,
@@ -280,18 +156,14 @@ class CalculatorApp(tk.Tk):
             fg=DISPLAY_FG,
             insertbackground=DISPLAY_FG,
             relief="flat",
-            borderwidth=2,
-            highlightthickness=2,
-            highlightbackground=DISPLAY_BORDER,
-            highlightcolor=DISPLAY_BORDER,
+            borderwidth=0,
             justify="right",
         )
         self.display.pack(fill="both", expand=True)
 
-    def _build_toggles(self, parent=None):
-        parent = parent or self
-        toggle_frame = tk.Frame(parent, bg=MAIN_BG)
-        toggle_frame.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 6))
+    def _build_toggles(self):
+        toggle_frame = tk.Frame(self, bg=MAIN_BG)
+        toggle_frame.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
 
         self.mode_btn = RoundedButton(
             toggle_frame,
@@ -300,7 +172,7 @@ class CalculatorApp(tk.Tk):
             width=130,
             height=38,
             radius=10,
-            bg_color=BTN_BG,
+            bg_color=FUNC_BG,
             font=("SFMono", 12, "bold"),
         )
         self.mode_btn.pack(side="left")
@@ -315,15 +187,14 @@ class CalculatorApp(tk.Tk):
             width=90,
             height=38,
             radius=10,
-            bg_color=BTN_BG,
+            bg_color=FUNC_BG,
             font=("SFMono", 12, "bold"),
         )
         self.deg_btn.pack(side="right")
 
-    def _build_keypads(self, parent=None):
-        parent = parent or self
-        self.main_frame = tk.Frame(parent, bg=MAIN_BG)
-        self.main_frame.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 8))
+    def _build_keypads(self):
+        self.main_frame = tk.Frame(self, bg=MAIN_BG)
+        self.main_frame.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 16))
 
         # Scientific panel (left/top)
         self.science_frame = tk.Frame(self.main_frame, bg=MAIN_BG)
@@ -342,23 +213,14 @@ class CalculatorApp(tk.Tk):
         self._set_scientific(self.is_scientific)
 
     def _btn(self, parent, text, cmd, kind="normal"):
-        bg = BTN_BG
-        fg = BTN_TEXT_NORMAL
-        border = BTN_BORDER
-        glow = BTN_NEON_GLOW
+        color = BTN_BG
         if kind == "func":
-            fg = BTN_TEXT_FUNC
+            color = FUNC_BG
         elif kind == "equals":
-            bg = EQUALS_BG
-            fg = "#FFFFFF"
-            border = lighten_color(EQUALS_BG, 0.25)
-            glow = "#FFFFFF"
+            color = EQUALS_BG
         elif kind == "accent":
-            bg = ACCENT_BG
-            fg = "#2D1B00"
-            border = lighten_color(ACCENT_BG, 0.25)
-            glow = BTN_NEON_GLOW
-        return RoundedButton(parent, text=text, command=cmd, bg_color=bg, fg_color=fg, border_color=border, glow_color=glow)
+            color = ACCENT_BG
+        return RoundedButton(parent, text=text, command=cmd, bg_color=color)
 
     def _populate_standard_keys(self):
         grid = tk.Frame(self.standard_frame, bg=MAIN_BG)
@@ -450,12 +312,11 @@ class CalculatorApp(tk.Tk):
         self._btn(grid, "×", lambda: self._append(" × "), kind="func").grid(row=5, column=2, sticky="nsew", padx=6, pady=6)
         self._btn(grid, "+/-", self._toggle_sign, kind="func").grid(row=5, column=3, sticky="nsew", padx=6, pady=6)
 
-    def _configure_grid(self, container=None):
-        container = container or self
-        container.grid_rowconfigure(0, weight=0)
-        container.grid_rowconfigure(1, weight=0)
-        container.grid_rowconfigure(2, weight=1)
-        container.grid_columnconfigure(0, weight=1)
+    def _configure_grid(self):
+        self.grid_rowconfigure(0, weight=0)
+        self.grid_rowconfigure(1, weight=0)
+        self.grid_rowconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=1)
 
     # ---------- Event Handlers ----------
     def _toggle_mode(self):

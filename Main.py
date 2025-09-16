@@ -158,8 +158,13 @@ class CalculatorApp(tk.Tk):
             relief="flat",
             borderwidth=0,
             justify="right",
+            takefocus=0,
         )
         self.display.pack(fill="both", expand=True)
+        # Prevent direct typing/cursor edits in the entry
+        self.display.bind("<Key>", lambda e: "break")
+        self.display.bind("<Button-1>", lambda e: "break")
+        self.display.bind("<FocusIn>", lambda e: self.focus_set())
 
     def _build_toggles(self):
         toggle_frame = tk.Frame(self, bg=MAIN_BG)
@@ -345,12 +350,15 @@ class CalculatorApp(tk.Tk):
 
     def _append(self, value: str):
         self.expression.set(self.expression.get() + value)
+        self._ensure_cursor_end()
 
     def _clear(self):
         self.expression.set("")
+        self._ensure_cursor_end()
 
     def _backspace(self):
         self.expression.set(self.expression.get()[:-1])
+        self._ensure_cursor_end()
 
     def _toggle_sign(self):
         expr = self.expression.get()
@@ -365,18 +373,42 @@ class CalculatorApp(tk.Tk):
             self.expression.set(expr[:i] + expr[i+1:])
         else:
             self.expression.set(expr[:i+1] + '-' + expr[i+1:])
+        self._ensure_cursor_end()
 
     def _handle_keypress(self, event):
         char = event.char
-        if event.keysym in ("Return", "KP_Enter"):
+        keysym = event.keysym
+        # Handle control keys
+        if keysym in ("Return", "KP_Enter"):
             self._evaluate()
-        elif event.keysym == "BackSpace":
+            return "break"
+        if keysym == "BackSpace":
             self._backspace()
-        elif event.keysym == "Escape":
+            return "break"
+        if keysym == "Escape":
             self._clear()
-        elif char in "0123456789.+-*/()^":
+            return "break"
+
+        # Block all alphabetic input from keyboard
+        if char and char.isalpha():
+            return "break"
+
+        # Allow only specific printable characters
+        allowed = set("0123456789.+-*/()^%")
+        if char in allowed:
             mapping = {'*': ' × ', '/': ' ÷ ', '^': ' ^ '}
             self._append(mapping.get(char, char))
+            return "break"
+
+        # Ignore other keys (arrows, modifiers) to avoid cursor issues
+        return "break"
+
+    def _ensure_cursor_end(self):
+        try:
+            self.display.icursor("end")
+            self.display.xview_moveto(1.0)
+        except Exception:
+            pass
 
     # ---------- Evaluation ----------
     def _evaluate(self):
@@ -391,8 +423,10 @@ class CalculatorApp(tk.Tk):
             if isinstance(result, float) and abs(result - int(result)) < 1e-12:
                 result = int(result)
             self.expression.set(str(result))
+            self._ensure_cursor_end()
         except Exception:
             self.expression.set("Math Error")
+            self._ensure_cursor_end()
 
     # Percent transform: converts tokens like 50% -> (50/100)
     def _transform_percent(self, s: str) -> str:

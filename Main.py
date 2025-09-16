@@ -2,30 +2,91 @@ import math
 import tkinter as tk
 
 
-# Simple colors and sizes
-MAIN_BG = "#1E1E2E"
-BTN_BG = "#2D2D3A"
-FUNC_BG = "#4C4C6D"
-EQUALS_BG = "#FF6B6B"
-ACCENT_BG = "#FFB347"
-BTN_FG = "#FFFFFF"
-DISPLAY_BG = "#121212"
-DISPLAY_FG = "#00FFAB"
+# -----------------------------
+# Color and Style Configuration
+# -----------------------------
+MAIN_BG = "#1E1E2E"       # deep dark gray
+BTN_BG = "#2D2D3A"        # dark slate
+FUNC_BG = "#4C4C6D"       # muted blue-gray
+EQUALS_BG = "#FF6B6B"     # modern coral red
+ACCENT_BG = "#FFB347"     # amber/orange accent (clear/backspace)
+BTN_FG = "#FFFFFF"         # white
+DISPLAY_BG = "#121212"    # near black
+DISPLAY_FG = "#00FFAB"    # neon teal/green
 
+# Minimum sizes for each mode
 STANDARD_MIN_W, STANDARD_MIN_H = 360, 560
 SCIENTIFIC_MIN_W, SCIENTIFIC_MIN_H = 520, 560
 
 
-# Global state
-root = tk.Tk()
-root.title("Scientific Calculator")
-root.configure(bg=MAIN_BG)
-root.geometry("560x640")
+def lighten_color(hex_color: str, factor: float = 0.12) -> str:
+    hex_color = hex_color.lstrip('#')
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    r = min(255, int(r + (255 - r) * factor))
+    g = min(255, int(g + (255 - g) * factor))
+    b = min(255, int(b + (255 - b) * factor))
+    return f"#{r:02X}{g:02X}{b:02X}"
 
+
+# -----------------------------
+# Global state
+# -----------------------------
+root = None
 is_scientific = True
-angle_mode = tk.StringVar(value="DEG")
+angle_mode = None
 memory_value = 0.0
-expression = tk.StringVar(value="")
+expression = None
+display = None
+main_frame = None
+science_frame = None
+standard_frame = None
+
+
+def create_rounded_button(parent, text="", command=None, width=80, height=56, radius=12, bg_color=BTN_BG, fg_color=BTN_FG, font=("SFMono", 14, "bold")):
+    canvas = tk.Canvas(parent, width=width, height=height, highlightthickness=0, bd=0, bg=MAIN_BG)
+    hover_bg = lighten_color(bg_color, 0.12)
+
+    def draw(color):
+        canvas.delete("all")
+        w = width
+        h = height
+        r = min(radius, w // 2, h // 2)
+        x1, y1, x2, y2 = 2, 2, w - 2, h - 2
+        # Rounded rectangle
+        parts = [
+            canvas.create_rectangle(x1 + r, y1, x2 - r, y2, outline=color, fill=color),
+            canvas.create_rectangle(x1, y1 + r, x2, y2 - r, outline=color, fill=color),
+            canvas.create_arc(x1, y1, x1 + 2 * r, y1 + 2 * r, start=90, extent=90, outline=color, fill=color),
+            canvas.create_arc(x2 - 2 * r, y1, x2, y1 + 2 * r, start=0, extent=90, outline=color, fill=color),
+            canvas.create_arc(x1, y2 - 2 * r, x1 + 2 * r, y2, start=180, extent=90, outline=color, fill=color),
+            canvas.create_arc(x2 - 2 * r, y2 - 2 * r, x2, y2, start=270, extent=90, outline=color, fill=color),
+        ]
+        canvas.create_text((w // 2, h // 2), text=text, fill=fg_color, font=font)
+        canvas._parts = parts
+
+    def paint(color):
+        for item in getattr(canvas, "_parts", []):
+            canvas.itemconfig(item, fill=color, outline=color)
+
+    def on_enter(_):
+        paint(hover_bg)
+
+    def on_leave(_):
+        paint(bg_color)
+
+    def on_click(_):
+        if callable(command):
+            command()
+
+    draw(bg_color)
+    canvas.bind("<Enter>", on_enter)
+    canvas.bind("<Leave>", on_leave)
+    canvas.bind("<Button-1>", on_click)
+    canvas.bind("<Key-Return>", on_click)
+    canvas.bind("<Key-space>", on_click)
+    return canvas
 
 
 def ensure_cursor_end():
@@ -71,17 +132,15 @@ def build_toggles():
     global mode_btn, deg_btn
     frame = tk.Frame(root, bg=MAIN_BG)
     frame.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
-    mode_btn = tk.Button(frame, text="Scientific" if is_scientific else "Standard", command=toggle_mode,
-                         bg=FUNC_BG, fg=BTN_FG, relief="flat", padx=12, pady=8)
+    mode_btn = create_rounded_button(frame, text="Scientific" if is_scientific else "Standard", command=toggle_mode, width=130, height=38, radius=10, bg_color=FUNC_BG, font=("SFMono", 12, "bold"))
     mode_btn.pack(side="left")
     spacer = tk.Frame(frame, bg=MAIN_BG)
     spacer.pack(side="left", expand=True)
-    deg_btn = tk.Button(frame, text="DEG", command=toggle_angle_mode,
-                        bg=FUNC_BG, fg=BTN_FG, relief="flat", padx=12, pady=8)
+    deg_btn = create_rounded_button(frame, text="DEG", command=toggle_angle_mode, width=90, height=38, radius=10, bg_color=FUNC_BG, font=("SFMono", 12, "bold"))
     deg_btn.pack(side="right")
 
 
-def btn(parent, text, cmd, kind="normal"):
+def add_btn(parent, text, cmd, kind="normal"):
     bg = BTN_BG
     fg = BTN_FG
     if kind == "func":
@@ -91,7 +150,8 @@ def btn(parent, text, cmd, kind="normal"):
     elif kind == "accent":
         bg = ACCENT_BG
         fg = "#2D1B00"
-    return tk.Button(parent, text=text, command=cmd, bg=bg, fg=fg, relief="flat", padx=8, pady=8, font=("SFMono", 14, "bold"))
+    btn = create_rounded_button(parent, text=text, command=cmd, bg_color=bg, fg_color=fg)
+    return btn
 
 
 def populate_standard_keys(parent):
@@ -102,35 +162,35 @@ def populate_standard_keys(parent):
     for c in range(4):
         grid.grid_columnconfigure(c, weight=1, uniform="std")
 
-    btn(grid, "MC", lambda: memory("MC"), kind="func").grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "MR", lambda: memory("MR"), kind="func").grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "M+", lambda: memory("M+"), kind="func").grid(row=0, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "M-", lambda: memory("M-"), kind="func").grid(row=0, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "MC", lambda: memory("MC"), kind="func").grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "MR", lambda: memory("MR"), kind="func").grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "M+", lambda: memory("M+"), kind="func").grid(row=0, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "M-", lambda: memory("M-"), kind="func").grid(row=0, column=3, sticky="nsew", padx=6, pady=6)
 
-    btn(grid, "C", clear, kind="accent").grid(row=1, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "⌫", backspace, kind="accent").grid(row=1, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "(", lambda: append("("), kind="func").grid(row=1, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, ")", lambda: append(")"), kind="func").grid(row=1, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "C", clear, kind="accent").grid(row=1, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "⌫", backspace, kind="accent").grid(row=1, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "(", lambda: append("("), kind="func").grid(row=1, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, ")", lambda: append(")"), kind="func").grid(row=1, column=3, sticky="nsew", padx=6, pady=6)
 
-    btn(grid, "7", lambda: append("7")).grid(row=2, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "8", lambda: append("8")).grid(row=2, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "9", lambda: append("9")).grid(row=2, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "÷", lambda: append(" ÷ "), kind="func").grid(row=2, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "7", lambda: append("7")).grid(row=2, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "8", lambda: append("8")).grid(row=2, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "9", lambda: append("9")).grid(row=2, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "÷", lambda: append(" ÷ "), kind="func").grid(row=2, column=3, sticky="nsew", padx=6, pady=6)
 
-    btn(grid, "4", lambda: append("4")).grid(row=3, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "5", lambda: append("5")).grid(row=3, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "6", lambda: append("6")).grid(row=3, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "×", lambda: append(" × "), kind="func").grid(row=3, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "4", lambda: append("4")).grid(row=3, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "5", lambda: append("5")).grid(row=3, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "6", lambda: append("6")).grid(row=3, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "×", lambda: append(" × "), kind="func").grid(row=3, column=3, sticky="nsew", padx=6, pady=6)
 
-    btn(grid, "1", lambda: append("1")).grid(row=4, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "2", lambda: append("2")).grid(row=4, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "3", lambda: append("3")).grid(row=4, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "-", lambda: append(" - "), kind="func").grid(row=4, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "1", lambda: append("1")).grid(row=4, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "2", lambda: append("2")).grid(row=4, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "3", lambda: append("3")).grid(row=4, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "-", lambda: append(" - "), kind="func").grid(row=4, column=3, sticky="nsew", padx=6, pady=6)
 
-    btn(grid, "0", lambda: append("0")).grid(row=5, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, ".", lambda: append(".")).grid(row=5, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "+", lambda: append(" + "), kind="func").grid(row=5, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "=", evaluate, kind="equals").grid(row=5, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "0", lambda: append("0")).grid(row=5, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, ".", lambda: append(".")).grid(row=5, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "+", lambda: append(" + "), kind="func").grid(row=5, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "=", evaluate, kind="equals").grid(row=5, column=3, sticky="nsew", padx=6, pady=6)
 
 
 def populate_scientific_keys(parent):
@@ -141,35 +201,35 @@ def populate_scientific_keys(parent):
     for c in range(4):
         grid.grid_columnconfigure(c, weight=1, uniform="sci")
 
-    btn(grid, "sin", lambda: append("sin("), kind="func").grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "cos", lambda: append("cos("), kind="func").grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "tan", lambda: append("tan("), kind="func").grid(row=0, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "^", lambda: append(" ^ "), kind="func").grid(row=0, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "sin", lambda: append("sin("), kind="func").grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "cos", lambda: append("cos("), kind="func").grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "tan", lambda: append("tan("), kind="func").grid(row=0, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "^", lambda: append(" ^ "), kind="func").grid(row=0, column=3, sticky="nsew", padx=6, pady=6)
 
-    btn(grid, "asin", lambda: append("asin("), kind="func").grid(row=1, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "acos", lambda: append("acos("), kind="func").grid(row=1, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "atan", lambda: append("atan("), kind="func").grid(row=1, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "√", lambda: append("sqrt("), kind="func").grid(row=1, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "asin", lambda: append("asin("), kind="func").grid(row=1, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "acos", lambda: append("acos("), kind="func").grid(row=1, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "atan", lambda: append("atan("), kind="func").grid(row=1, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "√", lambda: append("sqrt("), kind="func").grid(row=1, column=3, sticky="nsew", padx=6, pady=6)
 
-    btn(grid, "sinh", lambda: append("sinh("), kind="func").grid(row=2, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "cosh", lambda: append("cosh("), kind="func").grid(row=2, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "tanh", lambda: append("tanh("), kind="func").grid(row=2, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "x²", lambda: append("square("), kind="func").grid(row=2, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "sinh", lambda: append("sinh("), kind="func").grid(row=2, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "cosh", lambda: append("cosh("), kind="func").grid(row=2, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "tanh", lambda: append("tanh("), kind="func").grid(row=2, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "x²", lambda: append("square("), kind="func").grid(row=2, column=3, sticky="nsew", padx=6, pady=6)
 
-    btn(grid, "log", lambda: append("log10("), kind="func").grid(row=3, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "ln", lambda: append("ln("), kind="func").grid(row=3, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "exp", lambda: append("exp("), kind="func").grid(row=3, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "x³", lambda: append("cube("), kind="func").grid(row=3, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "log", lambda: append("log10("), kind="func").grid(row=3, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "ln", lambda: append("ln("), kind="func").grid(row=3, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "exp", lambda: append("exp("), kind="func").grid(row=3, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "x³", lambda: append("cube("), kind="func").grid(row=3, column=3, sticky="nsew", padx=6, pady=6)
 
-    btn(grid, "x!", lambda: append("factorial("), kind="func").grid(row=4, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "|x|", lambda: append("abs("), kind="func").grid(row=4, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "π", lambda: append("pi"), kind="func").grid(row=4, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "e", lambda: append("e"), kind="func").grid(row=4, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "x!", lambda: append("factorial("), kind="func").grid(row=4, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "|x|", lambda: append("abs("), kind="func").grid(row=4, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "π", lambda: append("pi"), kind="func").grid(row=4, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "e", lambda: append("e"), kind="func").grid(row=4, column=3, sticky="nsew", padx=6, pady=6)
 
-    btn(grid, "%", lambda: append("%"), kind="func").grid(row=5, column=0, sticky="nsew", padx=6, pady=6)
-    btn(grid, "÷", lambda: append(" ÷ "), kind="func").grid(row=5, column=1, sticky="nsew", padx=6, pady=6)
-    btn(grid, "×", lambda: append(" × "), kind="func").grid(row=5, column=2, sticky="nsew", padx=6, pady=6)
-    btn(grid, "+/-", toggle_sign, kind="func").grid(row=5, column=3, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "%", lambda: append("%"), kind="func").grid(row=5, column=0, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "÷", lambda: append(" ÷ "), kind="func").grid(row=5, column=1, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "×", lambda: append(" × "), kind="func").grid(row=5, column=2, sticky="nsew", padx=6, pady=6)
+    add_btn(grid, "+/-", toggle_sign, kind="func").grid(row=5, column=3, sticky="nsew", padx=6, pady=6)
 
 
 def build_keypads():
@@ -206,7 +266,15 @@ def get_is_scientific():
 def set_scientific(is_sci):
     global is_scientific
     is_scientific = is_sci
-    mode_btn.configure(text="Scientific" if is_sci else "Standard")
+    # Update mode button text by redrawing
+    mode_btn_label = "Scientific" if is_sci else "Standard"
+    mode_btn.destroy()
+    # Recreate mode button in place
+    parent = mode_btn.master
+    new_btn = create_rounded_button(parent, text=mode_btn_label, command=toggle_mode, width=130, height=38, radius=10, bg_color=FUNC_BG, font=("SFMono", 12, "bold"))
+    new_btn.pack(side="left")
+    globals()["mode_btn"] = new_btn
+
     if is_sci:
         science_frame.grid()
     else:
@@ -216,7 +284,12 @@ def set_scientific(is_sci):
 
 def toggle_angle_mode():
     angle_mode.set("RAD" if angle_mode.get() == "DEG" else "DEG")
-    deg_btn.configure(text=angle_mode.get())
+    # Update deg button text by recreating it
+    deg_btn.destroy()
+    parent = deg_btn.master
+    new_btn = create_rounded_button(parent, text=angle_mode.get(), command=toggle_angle_mode, width=90, height=38, radius=10, bg_color=FUNC_BG, font=("SFMono", 12, "bold"))
+    new_btn.pack(side="right")
+    globals()["deg_btn"] = new_btn
 
 
 def append(value):
@@ -438,6 +511,14 @@ def apply_min_size():
 
 
 def main():
+    global root, angle_mode, expression
+    root = tk.Tk()
+    root.title("Scientific Calculator")
+    root.configure(bg=MAIN_BG)
+    root.geometry("560x640")
+    angle_mode = tk.StringVar(value="DEG")
+    expression = tk.StringVar(value="")
+
     build_menu()
     build_display()
     build_toggles()
